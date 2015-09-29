@@ -13,7 +13,10 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import java.util.List;
 
 public class PlaceViewActivity extends ListActivity implements LocationListener {
 	private static final long FIVE_MINS = 5 * 60 * 1000;
@@ -49,7 +52,8 @@ public class PlaceViewActivity extends ListActivity implements LocationListener 
 		// TODO - add a footerView to the ListView
 		// You can use footer_view.xml to define the footer
 
-        View footerView = null;
+		getListView().setFooterDividersEnabled(true);
+		TextView footerView = (TextView) getLayoutInflater().inflate(R.layout.footer_view, null);
 
 		// TODO - footerView must respond to user clicks, handling 3 cases:
 
@@ -72,23 +76,8 @@ public class PlaceViewActivity extends ListActivity implements LocationListener 
 			@Override
 			public void onClick(View arg0) {
 
+			clickedFooter();
 
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
 			}
 
 		});
@@ -97,6 +86,54 @@ public class PlaceViewActivity extends ListActivity implements LocationListener 
 		mAdapter = new PlaceViewAdapter(getApplicationContext());
 		setListAdapter(mAdapter);
 
+	}
+
+	private void clickedFooter() {
+
+		// footerView must respond to user clicks.
+		// Must handle 3 cases:
+		// 1) The current location is new - download new Place Badge. Issue the
+		// following log call:
+		// log("Starting Place Download");
+		if (mLastLocationReading != null) {
+			if (isNewLocation(mLastLocationReading)) {
+				PlaceDownloaderTask downloader = new PlaceDownloaderTask(PlaceViewActivity.this, false);
+				downloader.execute(mLastLocationReading);
+				Toast.makeText(getApplicationContext(), "Checking new place data", Toast.LENGTH_SHORT).show();
+				Log.d(TAG, "Starting Place Download");
+			}
+
+			// 2) The current location has been seen before - issue Toast
+			// message.
+			// Issue the following log call:
+			// log("You already have this location badge");
+			else {
+				Log.d(TAG, "You already have this location badge");
+				Toast.makeText(getApplicationContext(), "You already have this location badge", Toast.LENGTH_SHORT).show();
+			}
+		}
+
+		// 3) There is no current location - response is up to you. The best
+		// solution is to disable the footerView until you have a location.
+		// Issue the following log call:
+		// log("Location data is not available");
+		else {
+			Log.d(TAG, "Location data is not available");
+		}
+	}
+
+	private boolean isNewLocation(Location newLocation) {
+		List<PlaceRecord> places = mAdapter.getList();
+		for(PlaceRecord place : places){
+			Log.d("MINE", "Old location: " + place.getLocation().toString());
+			Log.d("MINE", "New location: " + newLocation.toString());
+			if(newLocation.distanceTo(place.getLocation()) < mMinDistance){
+				Log.d("MINE", "Not new");
+				return false;
+			}
+			Log.d("MINE", "New");
+		}
+		return true;
 	}
 
 	@Override
@@ -108,24 +145,39 @@ public class PlaceViewActivity extends ListActivity implements LocationListener 
 		// TODO - Check NETWORK_PROVIDER for an existing location reading.
 		// Only keep this last reading if it is fresh - less than 5 minutes old
 
-
-        
-        
-        mLastLocationReading = null;
-
+		mLastLocationReading = getLastKnownLocation();
 
 		// TODO - register to receive location updates from NETWORK_PROVIDER
+		mLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, mMinTime, mMinDistance, this);
 
+	}
 
-        
-        
+	private Location getLastKnownLocation() {
+		List<String> matchingProviders = mLocationManager.getAllProviders();
+
+		for (String provider : matchingProviders) {
+
+			// Note: Uncomment these lines for coursera tests
+			//if (!provider.equals(LocationManager.NETWORK_PROVIDER))
+			//	continue;
+
+			Location location = mLocationManager.getLastKnownLocation(provider);
+
+			if (location != null) {
+				if (ageInMilliseconds(location) < FIVE_MINS) {
+					Log.d(TAG, "The choosen provider was: " + provider);
+					return location;
+				}
+			}
+		}
+		return null;
 	}
 
 	@Override
 	protected void onPause() {
 
 		// TODO - unregister for location updates
-
+		mLocationManager.removeUpdates(this);
         
         
 		shutdownMockLocationManager();
@@ -136,6 +188,7 @@ public class PlaceViewActivity extends ListActivity implements LocationListener 
 	public void addNewPlace(PlaceRecord place) {
 	
 		// TODO - Attempt to add place to the adapter, considering the following cases
+		mAdapter.add(place);
 
 		// A PlaceBadge for this location already exists - issue a Toast message
 		// with the text - "You already have this location badge." Use the PlaceRecord 
@@ -178,18 +231,19 @@ public class PlaceViewActivity extends ListActivity implements LocationListener 
 		// TODO - Update location considering the following cases.
 		// 1) If there is no last location, set the last location to the current
 		// location.
+		if (mLastLocationReading == null) {
+			mLastLocationReading = currentLocation;
+		}
 		// 2) If the current location is older than the last location, ignore
 		// the current location
+		else if (currentLocation.getTime() < mLastLocationReading.getTime())
+			return;
 		// 3) If the current location is newer than the last locations, keep the
 		// current location.
 
-        
-        
-        
-        
-        
-        
-			mLastLocationReading = null;
+		else {
+			mLastLocationReading = currentLocation;
+		}
 	}
 
 	@Override
